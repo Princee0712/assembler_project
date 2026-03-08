@@ -44,4 +44,39 @@ haltcount = 0
          error(i)
      if haltcount == 0:
          error (len(program))
-          
+
+
+# label detection
+labletable = {}
+address = 0 
+for i, line in enumerate(program):
+    if ":" in line:
+        parts = line.split(":", 1)
+        label = part[0].strip()
+        inst = parts[1].strip()
+        
+        labletable[label] = address
+        program[i] = inst 
+    address += 4
+    
+
+# register table and check function
+
+registers = {
+   "zero" : "00000", "ra" : "00001", "sp" : "00010", "tp" : "00100",
+   "gp" : "00011", "t0" : "00101", "t1" : " 00110", "t2" : "00111",
+   "t3" : "11100" , "t4" : "11101" , "t5" : " 11110", "t6" : "11111",
+   
+   "a0" : "01010", "a1" : "01011", "a2" : "01100", "a3" : "01101", "a4" : "01110", "a5" : "", 
+   "a6" : "10000", "a7" : "10001", 
+   
+   "fp" : "01000", "s0" : "01000", "s1" : "01001", "s2" : "10010", "s3" : "10011", "s4" : "10100", "s5" : "10101", "s6" : "10110", 
+   "s7" : "10111", "s8" : "11000", "s9" : "11001", "s10" : "11010", "s11" : "11011", 
+}
+
+def checkreg(r,line):
+    if r not in registers:
+        error(line)
+        
+        
+# opcode
