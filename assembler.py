@@ -103,5 +103,39 @@ funct3 = {
 funct7 = {
     "add":"0000000", "sub":"0100000", "slt":"0000000", 
     "sltu":"0000000", "xor":"0000000", "srl":"0000000", 
-    "and":"0000000", "or":"0000000", "xor":"0000000", 
+    "and":"0000000", "or":"0000000"
 }
+
+# instruction groups
+
+allinst = ["add","sub","slt","sltu","xor",
+           "sll","srl","or","and","addi",
+          "sltiu","jalr","sw","beq","bne",
+          "blt","bge","bltu","bgeu","lw",
+         "lui","auipc","jal"]
+
+rtype = ["add","sub","slt","sltu","xor","sll","srl","or","and"]
+
+itype = ["lw","addi","sltiu","jalr"]
+
+stype = ["sw"]
+
+btype = ["beq","bne","blt","bge","bltu","bgeu"]
+
+utype = ["lui","auipc"]
+
+jtype = ["jal"]
+
+# Assembler loop
+output = []
+pc = 0 
+for lineno, line in enumerate(program,1):
+    x = line.replace(" ", ",")
+    x = x.replace("(",",")
+    x = x.replace(")", "")
+    
+    parts = x.split(",")
+    op = parts[0]
+    
+    if op not in allinst:
+    error(lineno)
