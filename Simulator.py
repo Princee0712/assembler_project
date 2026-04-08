@@ -24,3 +24,17 @@ class Memory:
         addr = addr & MASK32
         aligned = addr & ~3
         self._mem[aligned] = value & MASK32
+        
+class Simulator:
+
+    DATA_BASE  = 0x00010000
+    DATA_SIZE  = 32
+    STACK_INIT = 0x0000017C
+
+    def __init__(self, instructions):
+        self.instructions = instructions
+        self.reg = [0] * 32
+        self.reg[2] = self.STACK_INIT
+        self.pc = 0
+        self.mem = Memory()
+        self.trace_lines = []
