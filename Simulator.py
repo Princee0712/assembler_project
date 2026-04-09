@@ -24,7 +24,8 @@ class Memory:
         addr = addr & MASK32
         aligned = addr & ~3
         self._mem[aligned] = value & MASK32
-        
+
+
 class Simulator:
 
     DATA_BASE  = 0x00010000
@@ -38,7 +39,7 @@ class Simulator:
         self.pc = 0
         self.mem = Memory()
         self.trace_lines = []
-        
+
     @staticmethod
     def bits(instr, hi, lo):
         width = hi - lo + 1
@@ -272,7 +273,8 @@ class Simulator:
             val  = self.mem.load_word(addr)
             lines.append(f"0x{addr:08X}:{fmt32(val)}")
         return lines
-    
+
+
 def main():
     if len(sys.argv) < 3:
         print("Usage: python3 Simulator.py <input_bin_file> <output_trace_file> [output_read_trace_file]",
