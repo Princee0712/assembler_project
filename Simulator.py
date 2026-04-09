@@ -272,3 +272,45 @@ class Simulator:
             val  = self.mem.load_word(addr)
             lines.append(f"0x{addr:08X}:{fmt32(val)}")
         return lines
+    
+def main():
+    if len(sys.argv) < 3:
+        print("Usage: python3 Simulator.py <input_bin_file> <output_trace_file> [output_read_trace_file]",
+              file=sys.stderr)
+        sys.exit(1)
+
+    input_file  = sys.argv[1]
+    output_file = sys.argv[2]
+
+    try:
+        with open(input_file, 'r') as f:
+            raw_lines = [l.strip() for l in f if l.strip()]
+    except FileNotFoundError:
+        print(f"Error: cannot open input file {input_file}", file=sys.stderr)
+        sys.exit(1)
+
+    instructions = []
+    for line in raw_lines:
+        try:
+            instructions.append(int(line, 2))
+        except ValueError:
+            print(f"Error: invalid binary line: {line}", file=sys.stderr)
+            sys.exit(1)
+
+    sim = Simulator(instructions)
+    sim.run_fixed()
+
+    mem_lines = sim.memory_dump()
+    all_lines = sim.trace_lines + mem_lines
+
+    with open(output_file, 'w') as f:
+        f.write("\n".join(all_lines) + "\n")
+
+    if len(sys.argv) >= 4:
+        read_trace_file = sys.argv[3]
+        with open(read_trace_file, 'w') as f:
+            f.write("\n".join(all_lines) + "\n")
+
+
+if __name__ == "__main__":
+    main()
