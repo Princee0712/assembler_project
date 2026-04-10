@@ -3,13 +3,41 @@ import sys
 WORD = 32
 MASK32 = 0xFFFFFFFF
 
+
+DATA_START  = 0x00010000
+DATA_END    = 0x0001007C   
+STACK_START = 0x00000100   
+STACK_END   = 0x0000017C   
+
+
 def sext(value, bits):
     sign_bit = 1 << (bits - 1)
     return (value & (sign_bit - 1)) - (value & sign_bit)
 
+
 def fmt32(value):
     v = value & MASK32
     return "0b" + format(v, "032b")
+
+
+def validate_mem_access(addr, op, line_num):
+    """
+    Validates a memory access for alignment and region bounds.
+    Includes line_num to identify which instruction in the input file failed.
+    Returns (True, '') on success, or (False, error_message) on failure.
+    """
+    if addr % 4 != 0:
+        return False, (f"Error: misaligned memory {op} at address "
+                       f"0x{addr:08X} (not 4-byte aligned) at line {line_num}")
+
+    in_stack = STACK_START <= addr <= STACK_END
+    in_data  = DATA_START  <= addr <= DATA_END
+
+    if not (in_stack or in_data):
+        return False, (f"Error: invalid memory {op} at address "
+                       f"0x{addr:08X} (outside valid memory regions) at line {line_num}")
+    return True, ''
+
 
 class Memory:
     def __init__(self):
@@ -39,6 +67,7 @@ class Simulator:
         self.pc = 0
         self.mem = Memory()
         self.trace_lines = []
+        self._halted = False         
 
     @staticmethod
     def bits(instr, hi, lo):
@@ -55,6 +84,10 @@ class Simulator:
             parts.append(fmt32(self.reg[i]))
         self.trace_lines.append(" ".join(parts) + " ")
 
+    def _current_line_num(self):
+        """Returns 1-based line number of the current instruction."""
+        return (self.pc >> 2) + 1
+
     def _step(self):
         pc = self.pc
         if pc < 0 or (pc >> 2) >= len(self.instructions):
@@ -64,6 +97,7 @@ class Simulator:
         instr = self.instructions[pc >> 2]
         opcode = self.bits(instr, 6, 0)
 
+        
         if opcode == 0b0110011:
             funct3 = self.bits(instr, 14, 12)
             funct7 = self.bits(instr, 31, 25)
@@ -100,6 +134,7 @@ class Simulator:
             self._reg_write(rd, result)
             self.pc += 4
 
+        
         elif opcode == 0b0010011:
             funct3 = self.bits(instr, 14, 12)
             rs1    = self.bits(instr, 19, 15)
@@ -136,12 +171,21 @@ class Simulator:
             self._reg_write(rd, result)
             self.pc += 4
 
+
         elif opcode == 0b0000011:
             funct3 = self.bits(instr, 14, 12)
             rs1    = self.bits(instr, 19, 15)
             rd     = self.bits(instr, 11,  7)
             imm    = sext(self.bits(instr, 31, 20), 12)
             addr   = (self.reg[rs1] + imm) & MASK32
+
+            line_num = self._current_line_num()
+            ok, err = validate_mem_access(addr, 'lw', line_num)
+            if not ok:
+                print(err, file=sys.stderr)
+                self._halted = True
+                return False
+
             if funct3 == 0b010:
                 result = self.mem.load_word(addr)
             else:
@@ -149,6 +193,7 @@ class Simulator:
             self._reg_write(rd, result)
             self.pc += 4
 
+        
         elif opcode == 0b1100111:
             rs1 = self.bits(instr, 19, 15)
             rd  = self.bits(instr, 11,  7)
@@ -158,6 +203,7 @@ class Simulator:
             self._reg_write(rd, ret)
             self.pc = target
 
+        
         elif opcode == 0b0100011:
             rs1    = self.bits(instr, 19, 15)
             rs2    = self.bits(instr, 24, 20)
@@ -165,23 +211,33 @@ class Simulator:
             imm_lo = self.bits(instr, 11,  7)
             imm    = sext((imm_hi << 5) | imm_lo, 12)
             addr   = (self.reg[rs1] + imm) & MASK32
+
+            line_num = self._current_line_num()
+            ok, err = validate_mem_access(addr, 'sw', line_num)
+            if not ok:
+                print(err, file=sys.stderr)
+                self._halted = True
+                return False
+
             self.mem.store_word(addr, self.reg[rs2])
             self.pc += 4
 
+        
         elif opcode == 0b1100011:
             funct3 = self.bits(instr, 14, 12)
             rs1    = self.bits(instr, 19, 15)
             rs2    = self.bits(instr, 24, 20)
-            b12  = self.bits(instr, 31, 31)
-            b11  = self.bits(instr,  7,  7)
-            b10_5= self.bits(instr, 30, 25)
-            b4_1 = self.bits(instr, 11,  8)
-            imm  = (b12 << 12) | (b11 << 11) | (b10_5 << 5) | (b4_1 << 1)
-            imm  = sext(imm, 13)
+            b12   = self.bits(instr, 31, 31)
+            b11   = self.bits(instr,  7,  7)
+            b10_5 = self.bits(instr, 30, 25)
+            b4_1  = self.bits(instr, 11,  8)
+            imm   = (b12 << 12) | (b11 << 11) | (b10_5 << 5) | (b4_1 << 1)
+            imm   = sext(imm, 13)
 
             v1 = self.reg[rs1]; v2 = self.reg[rs2]
             sv1 = sext(v1, 32); sv2 = sext(v2, 32)
 
+            
             if funct3 == 0b000 and rs1 == 0 and rs2 == 0 and imm == 0:
                 self.pc += 4
                 self._emit_trace()
@@ -200,12 +256,14 @@ class Simulator:
             else:
                 self.pc += 4
 
+        
         elif opcode == 0b0110111:
             rd  = self.bits(instr, 11,  7)
             imm = self.bits(instr, 31, 12) << 12
             self._reg_write(rd, imm & MASK32)
             self.pc += 4
 
+        
         elif opcode == 0b0010111:
             rd  = self.bits(instr, 11,  7)
             imm = self.bits(instr, 31, 12) << 12
@@ -213,8 +271,9 @@ class Simulator:
             self._reg_write(rd, result)
             self.pc += 4
 
+        
         elif opcode == 0b1101111:
-            rd = self.bits(instr, 11, 7)
+            rd     = self.bits(instr, 11, 7)
             b20    = self.bits(instr, 31, 31)
             b10_1  = self.bits(instr, 30, 21)
             b11    = self.bits(instr, 20, 20)
@@ -261,8 +320,10 @@ class Simulator:
                     if funct3 == 0b000 and rs1 == 0 and rs2 == 0 and imm == 0:
                         self._emit_trace()
                         break
-            self._step()
+            cont = self._step()
             self._emit_trace()
+            if not cont or self._halted:
+                break
         else:
             print("Warning: max steps reached without halt", file=sys.stderr)
 
